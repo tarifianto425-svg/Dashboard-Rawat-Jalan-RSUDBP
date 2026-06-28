@@ -1,1 +1,238 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Analisis Rawat Jalan RSUD Bangun Purba Januari - Juni 2026</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans text-gray-800">
 
+    <header class="bg-emerald-700 text-white p-6 shadow-md">
+        <div class="container mx-auto flex flex-col md:flex-row justify-between items-center">
+            <div>
+                <h1 class="text-2xl font-bold">Dashboard Analisis Rawat Jalan RSUD Bangun Purba Januari - Juni 2026</h1>
+                <p class="text-emerald-100 text-sm">Tahun 1447 H / 2026 M - Bank Sumut</p>
+            </div>
+            <div class="mt-4 md:mt-0 text-sm bg-emerald-800 px-4 py-2 rounded-lg shadow-inner">
+                🟢 Auto-sync dengan Google Sheets
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto p-4 md:p-6 space-y-6">
+        
+        <div id="loading" class="text-center py-10">
+            <p class="text-lg font-semibold text-gray-600 animate-pulse">Memuat dan menganalisis data langsung dari Google Sheets...</p>
+        </div>
+
+        <div id="dashboard-content" class="hidden space-y-6">
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl shadow-xs border-l-4 border-emerald-500">
+                    <p class="text-sm text-gray-500 font-medium uppercase">Total Jemaah</p>
+                    <p id="stat-total" class="text-3xl font-bold mt-1 text-gray-900">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-xs border-l-4 border-blue-500">
+                    <p class="text-sm text-gray-500 font-medium uppercase">Jemaah Pria (L)</p>
+                    <p id="stat-pria" class="text-3xl font-bold mt-1 text-blue-600">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-xs border-l-4 border-pink-500">
+                    <p class="text-sm text-gray-500 font-medium uppercase">Jemaah Wanita (P)</p>
+                    <p id="stat-wanita" class="text-3xl font-bold mt-1 text-pink-600">0</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-xs border-l-4 border-amber-500">
+                    <p class="text-sm text-gray-500 font-medium uppercase">Status Cadangan</p>
+                    <p id="stat-cadangan" class="text-3xl font-bold mt-1 text-amber-600">0</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-xs">
+                    <h2 class="text-md font-semibold mb-4 text-gray-700 border-b pb-2">Distribusi Kelompok Usia</h2>
+                    <div class="relative h-64">
+                        <canvas id="chartUsia"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-xs">
+                    <h2 class="text-md font-semibold mb-4 text-gray-700 border-b pb-2">Top 5 Jenis Pekerjaan</h2>
+                    <div class="relative h-64">
+                        <canvas id="chartPekerjaan"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-5 rounded-xl shadow-xs">
+                    <h2 class="text-md font-semibold mb-4 text-gray-700 border-b pb-2">Tingkat Pendidikan</h2>
+                    <div class="relative h-56">
+                        <canvas id="chartPendidikan"></canvas>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-xl shadow-xs md:col-span-2">
+                    <h2 class="text-md font-semibold mb-4 text-gray-700 border-b pb-2">Pendaftaran Terbanyak per Kabupaten/Kota</h2>
+                    <div class="relative h-56">
+                        <canvas id="chartKota"></canvas>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <script>
+        // GANTI INI DENGAN LINK CSV HASIL PUBLISH TO WEB ANDA
+        const csvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS_0qCNbL38nYqjSfV_38WiWQIMWlfS0OElKO_nJ1nvthR6KP2WiQYrYp9BSfpgz2VtWf7u0ObVZ8Zg/pub?output=csv';
+
+        // Fungsi Load Data
+        function loadDashboardData() {
+            Papa.parse(csvUrl, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    const data = results.data;
+                    renderDashboard(data);
+                },
+                error: function(err) {
+                    console.error("Gagal mengambil data spreadsheet:", err);
+                    alert("Gagal memuat data dari Google Sheets. Pastikan link CSV sudah benar.");
+                }
+            });
+        }
+
+        function renderDashboard(data) {
+            // Sembunyikan loading, tampilkan dashboard
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+
+            // 1. Pemrosesan Data Kuantitatif
+            let total = data.length;
+            let pria = 0;
+            let wanita = 0;
+            let cadangan = 0;
+
+            let usiaGroups = { 'Under 40': 0, '40-50': 0, '51-60': 0, '61-70': 0, 'Over 70': 0 };
+            let pekerjaanMap = {};
+            let pendidikanMap = {};
+            let kotaMap = {};
+
+            data.forEach(row => {
+                // Filter Gender
+                if (row.jenis_kelamin === 'L') pria++;
+                if (row.jenis_kelamin === 'P') wanita++;
+
+                // Filter Keterangan Cadangan
+                if (row.keterangan && row.keterangan.toLowerCase().includes('cadangan')) cadangan++;
+
+                // Pengelompokan Usia
+                let u = parseInt(row.usia);
+                if (u < 40) usiaGroups['Under 40']++;
+                else if (u <= 50) usiaGroups['40-50']++;
+                else if (u <= 60) usiaGroups['51-60']++;
+                else if (u <= 70) usiaGroups['61-70']++;
+                else if (u > 70) usiaGroups['Over 70']++;
+
+                // Peta Pekerjaan
+                if (row.pekerjaan) {
+                    pekerjaanMap[row.pekerjaan] = (pekerjaanMap[row.pekerjaan] || 0) + 1;
+                }
+                // Peta Pendidikan
+                if (row.pendidikan) {
+                    pendidikanMap[row.pendidikan] = (pendidikanMap[row.pendidikan] || 0) + 1;
+                }
+                // Peta Kota
+                if (row.kabkota) {
+                    kotaMap[row.kabkota] = (kotaMap[row.kabkota] || 0) + 1;
+                }
+            });
+
+            // Update Scorecards
+            document.getElementById('stat-total').innerText = total.toLocaleString('id-ID');
+            document.getElementById('stat-pria').innerText = pria.toLocaleString('id-ID');
+            document.getElementById('stat-wanita').innerText = wanita.toLocaleString('id-ID');
+            document.getElementById('stat-cadangan').innerText = cadangan.toLocaleString('id-ID');
+
+            // Helper untuk sorting Top Kategorikal
+            const sortTopData = (map, limit = 5) => {
+                return Object.entries(map)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, limit);
+            };
+
+            const topPekerjaan = sortTopData(pekerjaanMap, 5);
+            const topKota = sortTopData(kotaMap, 6);
+
+            // --- 2. Pembuatan Grafik (Chart.js) ---
+
+            // Grafik Kelompok Usia
+            new Chart(document.getElementById('chartUsia'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(usiaGroups),
+                    datasets: [{
+                        label: 'Jumlah Jemaah',
+                        data: Object.values(usiaGroups),
+                        backgroundColor: '#059669',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Grafik Top Pekerjaan
+            new Chart(document.getElementById('chartPekerjaan'), {
+                type: 'bar',
+                indexAxis: 'y',
+                data: {
+                    labels: topPekerjaan.map(x => x[0]),
+                    datasets: [{
+                        label: 'Jumlah',
+                        data: topPekerjaan.map(x => x[1]),
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 6
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Grafik Pendidikan (Pie Chart)
+            new Chart(document.getElementById('chartPendidikan'), {
+                type: 'pie',
+                data: {
+                    labels: Object.keys(pendidikanMap),
+                    datasets: [{
+                        data: Object.values(pendidikanMap),
+                        backgroundColor: ['#f59e0b', '#10b981', '#3b82f6', '#ec4899', '#8b5cf6', '#6b7280']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            // Grafik Kota Asal
+            new Chart(document.getElementById('chartKota'), {
+                type: 'line',
+                data: {
+                    labels: topKota.map(x => x[0]),
+                    datasets: [{
+                        label: 'Jemaah Pendaftar',
+                        data: topKota.map(x => x[1]),
+                        borderColor: '#10b981',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // Jalankan saat halaman dibuka
+        window.onload = loadDashboardData;
+    </script>
+</body>
+</html>
